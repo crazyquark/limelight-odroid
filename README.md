@@ -2,16 +2,16 @@
 
 [Limelight](https://github.com/limelight-stream) is an open source implementation of NVIDIA's GameStream, as used by the NVIDIA Shield, but built for Linux/OS X/Windows.
 
-Limelight-pc allows you to stream your full collection of Steam games from your powerful desktop to another PC or laptop running Linux/OS X/Windows.
+Limelight-odroid allows you to stream your full collection of Steam games from your powerful desktop to your odroid device, running ubuntu.
 
-Limelight also has an [Android implementation](https://github.com/limelight-stream/limelight-android). Versions for [iOS](https://github.com/limelight-stream/limelight-ios) and [Windows Phone](https://github.com/limelight-stream/limelight-wp) are currently in development.
+Limelight also has a [Desktop implementation](https://github.com/limelight-stream/limelight-pc) (which this is based on) and an [Android implementation](https://github.com/limelight-stream/limelight-android). Versions for [iOS](https://github.com/limelight-stream/limelight-ios) and [Windows Phone](https://github.com/limelight-stream/limelight-wp) are currently in development.
 
 ##Features
 
-* Streams Steam and all of your games from your PC to your Linux/OS X/Windows machine
+* Streams Steam and all of your games from your odroid
 * Keyboard and Mouse support
 * Full support for Xbox 360 controllers, PS3 and PS4 controllers, and other HID gamepads
-* Full Windows, OS X, and Linux Support
+* <s>Full Windows, OS X, and Linux Support</s>
 
 ##Features to come
 
@@ -21,7 +21,9 @@ Limelight also has an [Android implementation](https://github.com/limelight-stre
 ##Installation
 
 * Download [GeForce Experience](http://www.geforce.com/geforce-experience) and install on your Windows PC
-* Download the appropriate jar from the [GitHub releases page](https://github.com/limelight-stream/limelight-pc/releases)
+* <s>Download the appropriate jar from the [GitHub releases page](https://github.com/limelight-stream/limelight-pc/releases)</s> (no jars available for odroid yet, TODO)
+* [FFmpeg](https://github.com/FFmpeg/FFmpeg/tree/96470ca22b3b46677de0e2df64e87c5ec80d752b) (from source) and JDK7 need to be installed in addition to other compilation tools
+* also <code>export LD_LIBRARY_PATH=/usr/local/lib/</code> needs to be done ahead of time
 
 ##Requirements
 
@@ -49,18 +51,7 @@ To launch Limelight from a command line:
 * `-30fps` use 30 fps stream (default)
 * `-60fps` use 60 fps stream
 
-
-##Contribute
-
-This project is being actively developed at [XDA Developers](http://forum.xda-developers.com/showthread.php?t=2505510)
-
-1. Fork us
-2. Write code
-3. Send Pull Requests
-
-Check out our [website](http://limelight-stream.com) for project links and information.
-
-##Authors
+##Original Authors
 
 * [Cameron Gutman](https://github.com/cgutman)  
 * [Diego Waxemberg](https://github.com/dwaxemberg)  
@@ -70,3 +61,4 @@ Check out our [website](http://limelight-stream.com) for project links and infor
 Limelight is the work of students at [Case Western](http://case.edu) and was
 started as a project at [MHacks](http://mhacks.org).
 
+Odroid version modified from [Desktop build](https://github.com/limelight-stream/limelight-pc) by [Forrest Porter](https://github.com/fporter)
