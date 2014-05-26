@@ -4,6 +4,7 @@ import java.awt.Graphics;
 import java.awt.GraphicsConfiguration;
 import java.awt.GraphicsEnvironment;
 import java.awt.Transparency;
+import java.awt.image.BufferStrategy;
 import java.awt.image.BufferedImage;
 import java.awt.image.ColorModel;
 import java.awt.image.DataBufferInt;
@@ -30,6 +31,7 @@ public class SwingCpuDecoderRenderer implements VideoDecoderRenderer {
 	protected Graphics graphics;
 	protected JFrame frame;
 	protected BufferedImage image;
+  protected boolean dying;
 
 	protected static final int DECODER_BUFFER_SIZE = 92*1024;
 	protected ByteBuffer decoderBuffer;
@@ -54,7 +56,7 @@ public class SwingCpuDecoderRenderer implements VideoDecoderRenderer {
 		// We only use one thread because each additional thread adds a frame of latency
 		int avcFlags = AvcDecoder.BILINEAR_FILTERING | AvcDecoder.LOW_LATENCY_DECODE;
 		int threadCount = 1;
-		
+
 		GraphicsConfiguration graphicsConfiguration = GraphicsEnvironment.
 				getLocalGraphicsEnvironment().getDefaultScreenDevice().getDefaultConfiguration();
 
@@ -97,7 +99,6 @@ public class SwingCpuDecoderRenderer implements VideoDecoderRenderer {
 		}
 
 		frame = (JFrame)renderTarget;
-		graphics = frame.getGraphics();
 
         if (image == null) {
 			// The decoder renders to an RGB color model by default
@@ -119,7 +120,7 @@ public class SwingCpuDecoderRenderer implements VideoDecoderRenderer {
 				long nextFrameTime = System.currentTimeMillis();
 				int[] imageBuffer = ((DataBufferInt)image.getRaster().getDataBuffer()).getData();
 
-				while (!isInterrupted())
+				while (!isInterrupted() && !dying)
 				{
 					try {
                         delayFrame(nextFrameTime);
@@ -129,6 +130,7 @@ public class SwingCpuDecoderRenderer implements VideoDecoderRenderer {
 					}
 
                     renderFrame(imageBuffer);
+
 				}
 			}
 		};
@@ -180,6 +182,7 @@ public class SwingCpuDecoderRenderer implements VideoDecoderRenderer {
 	 * Stops the decoding and rendering of the video stream.
 	 */
 	@Override public void stop() {
+		dying = true;
 		rendererThread.interrupt();
 
 		try {
