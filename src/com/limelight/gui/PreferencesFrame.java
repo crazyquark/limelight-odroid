@@ -26,7 +26,7 @@ public class PreferencesFrame extends JFrame {
 	private JCheckBox fullscreen;
 	private JCheckBox useOpenGlRenderer;
 	private Preferences prefs;
-	
+
 	/**
 	 * Construcs a new frame and loads the saved preferences.
 	 * <br>The frame is not made visible until a call to <br>build()</br> is made.
@@ -38,43 +38,49 @@ public class PreferencesFrame extends JFrame {
 		this.setAlwaysOnTop(true);
 		prefs = PreferencesManager.getPreferences();
 	}
-	
+
 	/**
 	 * Constructs all components of the frame and makes the frame visible to the user.
 	 */
 	public void build() {
-		
+
 		JPanel mainPanel = new JPanel();
 		mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.Y_AXIS));
-		
+
 		resolution = new JComboBox();
 		for (Resolution res : Resolution.values()) {
 			resolution.addItem(res);
 		}
-		
+
 		resolution.setSelectedItem(prefs.getResolution());
-		
+
 		fullscreen = new JCheckBox("Fullscreen");
 		fullscreen.setSelected(prefs.getFullscreen());
-		
+
 		useOpenGlRenderer = new JCheckBox("Use OpenGL Renderer");
 		useOpenGlRenderer.setSelected(prefs.getUseOpenGlRenderer());
-	
+
+		if (System.getProperty("os.name", "").contains("Mac OS X")) {
+			fullscreen.setSelected(false);
+			fullscreen.setEnabled(false);
+			fullscreen.setText("Fullscreen (Unsupported)");
+		}
+
 		Box resolutionBox = Box.createHorizontalBox();
 		resolutionBox.add(Box.createHorizontalGlue());
 		resolutionBox.add(resolution);
 		resolutionBox.add(Box.createHorizontalGlue());
-		
+
 		Box fullscreenBox = Box.createHorizontalBox();
 		fullscreenBox.add(Box.createHorizontalGlue());
 		fullscreenBox.add(fullscreen);
 		fullscreenBox.add(Box.createHorizontalGlue());
-		
+
 		Box useOpenGlRendererBox = Box.createHorizontalBox();
 		useOpenGlRendererBox.add(Box.createHorizontalGlue());
 		useOpenGlRendererBox.add(useOpenGlRenderer);
 		useOpenGlRendererBox.add(Box.createHorizontalGlue());
-		
+
 		mainPanel.add(Box.createVerticalStrut(10));
 		mainPanel.add(resolutionBox);
 		mainPanel.add(Box.createVerticalStrut(5));
@@ -82,7 +88,7 @@ public class PreferencesFrame extends JFrame {
 		mainPanel.add(Box.createVerticalStrut(10));
 		mainPanel.add(useOpenGlRendererBox);
 		mainPanel.add(Box.createVerticalGlue());
-		
+
 		this.addWindowListener(new WindowAdapter() {
 			@Override
 			public void windowClosing(WindowEvent e) {
@@ -92,16 +98,16 @@ public class PreferencesFrame extends JFrame {
 				}
 			}
 		});
-		
+
 		this.getContentPane().add(mainPanel);
 
 		Dimension dim = Toolkit.getDefaultToolkit().getScreenSize();
 		//center on screen
 		this.setLocation((int)dim.getWidth()/2-this.getWidth()/2, (int)dim.getHeight()/2-this.getHeight()/2);
-		
+
 		this.setVisible(true);
 	}
-	
+
 	/*
 	 * Checks if the preferences have changed from the cached preferences.
 	 */
@@ -110,7 +116,7 @@ public class PreferencesFrame extends JFrame {
 				(prefs.getFullscreen() != fullscreen.isSelected()) ||
 				(prefs.getUseOpenGlRenderer() != useOpenGlRenderer.isSelected());
 	}
-	
+
 	/*
 	 * Writes the preferences to the disk.
 	 */
@@ -120,5 +126,5 @@ public class PreferencesFrame extends JFrame {
 		prefs.setUseOpenGlRenderer(useOpenGlRenderer.isSelected());
 		PreferencesManager.writePreferences(prefs);
 	}
-	
+
 }
