@@ -7,6 +7,7 @@
   <property name="libs.osx64.dir" location="${libs.dir}/osx"/>
   <property name="libs.lin32.dir" location="${libs.dir}/lin32"/>
   <property name="libs.lin64.dir" location="${libs.dir}/lin64"/>
+  <property name="libs.linarm.dir" location="${libs.dir}/linarm"/>
   <property name="libs.win32.dir" location="${libs.dir}/win32"/>
   <property name="libs.win64.dir" location="${libs.dir}/win64"/>
 
@@ -42,7 +43,8 @@
     <delete dir="${classes.dir}"/>
   </target>
 
-  <target name="all" depends="clean,limelight-osx,limelight-lin32,limelight-lin64,limelight-win32,limelight-win64"/>
+  <!-- add other targets below if you would like to build them as well -->
+  <target name="all" depends="clean,limelight-linarm"/>
 
   <target name="limelight-osx" depends="limelight-java">
     <!-- construct one-jar file -->
@@ -105,6 +107,28 @@
 
       <binlib>
         <fileset dir="${libs.lin64.dir}" includes="*"/>
+      </binlib>
+    </one-jar>
+  </target>
+
+  <target name="limelight-linarm" depends="limelight-java">
+    <!-- construct one-jar file -->
+    <one-jar destfile="${build.dir}/limelight-linarm.jar">
+      <manifest>
+        <attribute name="One-Jar-Main-Class" value="com.limelight.Limelight"/>
+      </manifest>
+
+      <main>
+        <!-- construct limelight.jar -->
+        <fileset dir="${classes.dir}/src"/>
+      </main>
+
+      <lib>
+        <fileset dir="${libs.dir}" includes="*.jar"/>
+      </lib>
+
+      <binlib>
+        <fileset dir="${libs.linarm.dir}" includes="*"/>
       </binlib>
     </one-jar>
   </target>
