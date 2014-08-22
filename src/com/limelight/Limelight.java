@@ -3,13 +3,10 @@ package com.limelight;
 import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
-import java.net.SocketException;
 import java.net.UnknownHostException;
 
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
-
-import org.xmlpull.v1.XmlPullParserException;
 
 import com.limelight.binding.LibraryHelper;
 import com.limelight.binding.PlatformBinding;
@@ -23,6 +20,7 @@ import com.limelight.nvstream.NvConnectionListener;
 import com.limelight.nvstream.StreamConfiguration;
 import com.limelight.nvstream.av.video.VideoDecoderRenderer;
 import com.limelight.nvstream.http.NvHTTP;
+import com.limelight.nvstream.http.PairingManager;
 import com.limelight.settings.PreferencesManager;
 import com.limelight.settings.SettingsManager;
 import com.limelight.settings.PreferencesManager.Preferences;
@@ -44,6 +42,7 @@ public class Limelight implements NvConnectionListener {
 	private boolean connectionTerminating;
 	private static JFrame limeFrame;
 	private Gamepad gamepad;
+	private VideoDecoderRenderer decoderRenderer;
 
 	/**
 	 * Constructs a new instance based on the given host
@@ -56,35 +55,25 @@ public class Limelight implements NvConnectionListener {
 	/*
 	 * Creates a connection to the host and starts up the stream.
 	 */
-	private void startUp(StreamConfiguration streamConfig, boolean fullscreen) {
+	private void startUp(StreamConfiguration streamConfig, Preferences prefs) {
 		streamFrame = new StreamFrame();
 
-		conn = new NvConnection(host, this, streamConfig);
-		streamFrame.build(this, conn, streamConfig, fullscreen);
+		decoderRenderer = PlatformBinding.getVideoDecoderRenderer();
+		
+		conn = new NvConnection(host, prefs.getUniqueId(), this, streamConfig, PlatformBinding.getCryptoProvider());
+		streamFrame.build(this, conn, streamConfig, prefs.getFullscreen());
 		conn.start(PlatformBinding.getDeviceName(), streamFrame,
 				VideoDecoderRenderer.FLAG_PREFER_QUALITY,
 				PlatformBinding.getAudioRenderer(),
-				PlatformBinding.getVideoDecoderRenderer());
+				decoderRenderer);
 	}
 
 	/*
 	 * Creates a StreamConfiguration given a Resolution. 
 	 * Used to specify what kind of stream will be used.
 	 */
-	private static StreamConfiguration createConfiguration(Resolution res) {
-		switch(res) {
-		case RES_720_30:
-			return new StreamConfiguration(1280, 720, 30, 5000);
-		case RES_720_60:
-			return new StreamConfiguration(1280, 720, 60, 10000);
-		case RES_1080_30:
-			return new StreamConfiguration(1920, 1080, 30, 10000);
-		case RES_1080_60:
-			return new StreamConfiguration(1920, 1080, 60, 25000);
-		default:
-			// this should never happen, if it does we want the NPE to occur so we know something is wrong
-			return null;
-		}
+	private static StreamConfiguration createConfiguration(Resolution res, Integer bitRate) {
+		return new StreamConfiguration("Steam", res.width, res.height, res.frameRate, bitRate*1000);
 	}
 
 	/*
@@ -140,9 +129,9 @@ public class Limelight implements NvConnectionListener {
 		Limelight limelight = new Limelight(host);
 
 		Preferences prefs = PreferencesManager.getPreferences();
-		StreamConfiguration streamConfig = createConfiguration(prefs.getResolution());
+		StreamConfiguration streamConfig = createConfiguration(prefs.getResolution(), prefs.getBitrate());
 
-		limelight.startUp(streamConfig, prefs.getFullscreen());
+		limelight.startUp(streamConfig, prefs);
 	}
 
 	/**
@@ -193,13 +182,19 @@ public class Limelight implements NvConnectionListener {
 		boolean fullscreen = false;
 		int resolution = 720;
 		int refresh = 60;
+		Integer bitrate = null;
+		
+		Preferences prefs = PreferencesManager.getPreferences();
+		
+		// Save preferences to preserve possibly new unique ID
+		PreferencesManager.writePreferences(prefs);
 
 		for (int i = 0; i < args.length; i++) {
 			if (args[i].equals("-pair")) {
 				if (i + 1 < args.length){
 					host = args[i+1];
 					System.out.println("Trying to pair to: " + host);
-					String msg = pair(host);
+					String msg = pair(prefs.getUniqueId(), host);
 					System.out.println("Pairing: " + msg);
 					System.exit(0);
 				} else {
@@ -214,10 +209,22 @@ public class Limelight implements NvConnectionListener {
 					System.err.println("Syntax error: hostname or ip address expected after -host");
 					System.exit(3);
 				}
+			} else if (args[i].equals("-bitrate")) {
+				if (i + 1 < args.length){
+					bitrate = Integer.parseInt(args[i+1]);
+					i++;
+				} else {
+					System.err.println("Syntax error: bitrate (in Mbps) expected after -bitrate");
+					System.exit(3);
+				}
 			} else if (args[i].equals("-fs")) {
 				fullscreen = true;
 			} else if (args[i].equals("-720")) {
 				resolution = 720;
+			} else if (args[i].equals("-768")) {
+			    resolution = 768;
+			} else if (args[i].equals("-900")) {
+			    resolution = 900;
 			} else if (args[i].equals("-1080")) {
 				resolution = 1080;
 			} else if (args[i].equals("-30fps")) {
@@ -234,22 +241,20 @@ public class Limelight implements NvConnectionListener {
 			System.exit(5);
 		}
 
-		Resolution streamRes = null;
-
-		if (resolution == 720 && refresh == 30) {
-			streamRes = Resolution.RES_720_30;
-		} else if (resolution == 720 && refresh == 60) {
-			streamRes = Resolution.RES_720_60;
-		} else if (resolution == 1080 && refresh == 30) {
-			streamRes = Resolution.RES_1080_30;
-		} else if (resolution == 1080 && refresh == 60) {
-			streamRes = Resolution.RES_1080_60;
+		Resolution streamRes = Resolution.findRes(resolution, refresh);
+		
+		if (bitrate == null) {
+			bitrate = streamRes.defaultBitrate;
 		}
 
-		StreamConfiguration streamConfig = createConfiguration(streamRes);
-
+		StreamConfiguration streamConfig = createConfiguration(streamRes, bitrate);
+		
+		prefs.setResolution(streamRes);
+		prefs.setBitrate(bitrate);
+		prefs.setFullscreen(fullscreen);
+		
 		Limelight limelight = new Limelight(host);
-		limelight.startUp(streamConfig, fullscreen);
+		limelight.startUp(streamConfig, prefs);
 		COMMAND_LINE_LAUNCH = true;
 	}
 
@@ -263,6 +268,12 @@ public class Limelight implements NvConnectionListener {
 		// Remove the gamepad listener
 		if (gamepad != null) {
 			GamepadListener.getInstance().removeListener(gamepad);
+		}
+		
+		int endToEndLatency = decoderRenderer.getAverageEndToEndLatency();
+		if (endToEndLatency != 0) {
+			displayMessage(String.format("Average client latency: %d ms",
+					endToEndLatency));
 		}
 
 		// Close the stream frame
@@ -328,48 +339,49 @@ public class Limelight implements NvConnectionListener {
 		}
 	}
 
-	public static String pair(final String host) {
+	public static String pair(final String uniqueId, final String host) {
 		String message = "";
-		String macAddress;
-		try {
-			macAddress = NvConnection.getMacAddressString();
-		} catch (SocketException e) {
-			e.printStackTrace();
-			message = "An error occured trying to get this system's MAC address";
-			return message;
-		}
-
-		if (macAddress == null) {
-			message = "Couldn't find a MAC address";
-			LimeLog.severe(message);
-			return message;
-		}
 
 		NvHTTP httpConn;
 		try {
 			httpConn = new NvHTTP(InetAddress.getByName(host),
-					macAddress, PlatformBinding.getDeviceName());
+					uniqueId, PlatformBinding.getDeviceName(), PlatformBinding.getCryptoProvider());
 			try {
-				if (httpConn.getPairState()) {
+				if (httpConn.getPairState() == PairingManager.PairState.PAIRED) {
 					message = "Already paired";
 				}
 				else {
-					int session = httpConn.getSessionId();
-					if (session == 0) {
-						message = "Pairing was declined by the target";
+					final String pinStr = PairingManager.generatePinString();
+					
+					// Spin the dialog off in a thread because it blocks
+					new Thread(new Runnable() {
+						public void run() {
+							JOptionPane.showMessageDialog(null, "Please enter the following PIN on the target PC: "+pinStr,
+									"Limelight", JOptionPane.INFORMATION_MESSAGE);
+						}
+					}).start();
+					
+					PairingManager.PairState pairState = httpConn.pair(pinStr);
+					if (pairState == PairingManager.PairState.PIN_WRONG) {
+						message = "Incorrect PIN";
 					}
-					else {
-						message = "Pairing was successful";
+					else if (pairState == PairingManager.PairState.FAILED) {
+						message = "Pairing failed";
+					}
+					else if (pairState == PairingManager.PairState.PAIRED) {
+						message = "Paired successfully";
 					}
 				}
-			} catch (IOException e) {
+			} catch (Exception e) {
 				message = e.getMessage();
-			} catch (XmlPullParserException e) {
-				message = e.getMessage();
+				e.printStackTrace();
 			}
 		} catch (UnknownHostException e1) {
 			message = "Failed to resolve host";
 		}
+		
+		// Dismiss the pairing dialog before showing the final status dialog
+		JOptionPane.getRootFrame().dispose();
 
 		return message;
 
@@ -382,7 +394,7 @@ public class Limelight implements NvConnectionListener {
 	public void displayMessage(String message) {
 		streamFrame.dispose();
 		JOptionPane.showMessageDialog(limeFrame, message, "Limelight", JOptionPane.INFORMATION_MESSAGE);
-	}	
+	}
 
 	/**
 	 * Displays an error to the user in the form of an error dialog

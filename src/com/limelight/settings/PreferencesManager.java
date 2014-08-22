@@ -2,6 +2,7 @@ package com.limelight.settings;
 
 import java.io.File;
 import java.io.Serializable;
+import java.util.Random;
 
 import com.limelight.LimeLog;
 
@@ -62,15 +63,23 @@ public abstract class PreferencesManager {
 		/**
 		 * The possible resolutions for the stream
 		 */
-		public enum Resolution { RES_720_30("1280x720 (30Hz)"), RES_720_60("1280x720 (60Hz)"), 
-			RES_1080_30("1920x1080 (30Hz)"), RES_1080_60("1920x1080 (60Hz)");
-			public String name;
+		public enum Resolution { RES_720_30(1280, 720, 30, 5), RES_720_60(1280, 720, 60, 10), 
+			RES_768_30(1366, 768, 30, 5), RES_768_60(1366, 768, 60, 15),
+			RES_900_30(1600, 900, 30, 10), RES_900_60(1600, 900, 60, 20),
+			RES_1080_30(1920, 1080, 30, 10), RES_1080_60(1920, 1080, 60, 25);
+			public int width;
+			public int height;
+			public int frameRate;
+			public int defaultBitrate;
 			
 			/*
 			 * Creates a new resolution with the specified name
 			 */
-			private Resolution(String name) {
-				this.name = name;
+			private Resolution(int width, int height, int frameRate, int defaultBitrate) {
+				this.width = width;
+				this.height = height;
+				this.frameRate = frameRate;
+				this.defaultBitrate = defaultBitrate;
 			}
 			
 			/**
@@ -79,13 +88,24 @@ public abstract class PreferencesManager {
 			 */
 			@Override
 			public String toString() {
-				return name;
+				return String.format("%dx%d (%dHz)", width, height, frameRate);
+			}
+			
+			public static Resolution findRes(int height, int refresh) {
+			    for (Resolution res : Resolution.values()) {
+			        if (res.height == height && res.frameRate == refresh) {
+			            return res;
+			        }
+			    }
+			    return null;
 			}
 		};
 		
 		private Resolution res;
+		private int bitrate;
 		private boolean fullscreen;
 		private String host;
+		private String uniqueId;
 		
 		/**
 		 * constructs default preferences: 720p 60Hz
@@ -101,10 +121,12 @@ public abstract class PreferencesManager {
 		 * @param res the <code>Resolution</code> to use
 		 * @param fullscreen whether to start the stream in fullscreen
 		 */
-		public Preferences(Resolution res, boolean fullscreen) {
+		private Preferences(Resolution res, boolean fullscreen) {
 			this.res = res;
+			this.bitrate = res.defaultBitrate;
 			this.fullscreen = fullscreen;
 			this.host = "GeForce PC host";
+			this.uniqueId = String.format("%016x", new Random().nextLong());
 		}
 		
 		/**
@@ -132,6 +154,14 @@ public abstract class PreferencesManager {
 		}
 		
 		/**
+		 * Gets the bitrate in this preference
+		 * @return the stored bitrate
+		 */
+		public int getBitrate() {
+			return bitrate;
+		}
+		
+		/**
 		 * Gets whether to use fullscreen
 		 * @return the stored fullscreen mode
 		 */
@@ -148,11 +178,27 @@ public abstract class PreferencesManager {
 		}
 		
 		/**
+		 * Sets the bitrate in this preference
+		 * @param bitrate the bitrate to save
+		 */
+		public void setBitrate(int bitrate) {
+			this.bitrate = bitrate;
+		}
+		
+		/**
 		 * Sets the fullscreen mode of this preference
 		 * @param fullscreen whether to use fullscreen
 		 */
 		public void setFullscreen(boolean fullscreen) {
 			this.fullscreen = fullscreen;
+		}
+		
+		/**
+		 * Gets the unique ID
+		 * @return uniqueId the unique ID
+		 */
+		public String getUniqueId() {
+			return uniqueId;
 		}
 	}
 }

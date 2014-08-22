@@ -1,5 +1,6 @@
 package com.limelight.binding.video;
 
+import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.GraphicsConfiguration;
 import java.awt.GraphicsEnvironment;
@@ -16,6 +17,7 @@ import com.limelight.LimeLog;
 import com.limelight.nvstream.av.ByteBufferDescriptor;
 import com.limelight.nvstream.av.DecodeUnit;
 import com.limelight.nvstream.av.video.VideoDecoderRenderer;
+import com.limelight.nvstream.av.video.VideoDepacketizer;
 import com.limelight.nvstream.av.video.cpu.AvcDecoder;
 
 /**
@@ -40,6 +42,9 @@ public class SwingCpuDecoderRenderer implements VideoDecoderRenderer {
 	
 	private static final int REFERENCE_PIXEL = 0x01020304;
 	
+	private int totalFrames;
+	private long totalTimeMs;
+	
 	/**
 	 * Sets up the decoder and renderer to render video at the specified dimensions
 	 * @param width the width of the video to render
@@ -47,14 +52,14 @@ public class SwingCpuDecoderRenderer implements VideoDecoderRenderer {
 	 * @param renderTarget what to render the video onto
 	 * @param drFlags flags for the decoder and renderer
 	 */
-	public void setup(int width, int height, int redrawRate, Object renderTarget, int drFlags) {
+	public boolean setup(int width, int height, int redrawRate, Object renderTarget, int drFlags) {
 		this.targetFps = redrawRate;
 		this.width = width;
 		this.height = height;
 		
-		// We only use one thread because each additional thread adds a frame of latency
-		int avcFlags = AvcDecoder.BILINEAR_FILTERING | AvcDecoder.LOW_LATENCY_DECODE;
-		int threadCount = 1;
+		// Use 2 decoding threads
+		int avcFlags = AvcDecoder.BILINEAR_FILTERING;
+		int threadCount = 2;
 		
 		GraphicsConfiguration graphicsConfiguration = GraphicsEnvironment.
 				getLocalGraphicsEnvironment().getDefaultScreenDevice().getDefaultConfiguration();
@@ -94,7 +99,8 @@ public class SwingCpuDecoderRenderer implements VideoDecoderRenderer {
 
 		int err = AvcDecoder.init(width, height, avcFlags, threadCount);
 		if (err != 0) {
-			throw new IllegalStateException("AVC decoder initialization failure: "+err);
+			LimeLog.severe("AVC decoder initialization failure: "+err);
+			return false;
 		}
 		
 		frame = (JFrame)renderTarget;
@@ -108,12 +114,14 @@ public class SwingCpuDecoderRenderer implements VideoDecoderRenderer {
 		decoderBuffer = ByteBuffer.allocate(DECODER_BUFFER_SIZE + AvcDecoder.getInputPaddingSize());
 		
 		LimeLog.info("Using software decoding");
+		
+		return true;
 	}
 
 	/**
 	 * Starts the decoding and rendering of the video stream on a new thread
 	 */
-	public void start() {
+	public boolean start(final VideoDepacketizer depacketizer) {
 		rendererThread = new Thread() {
 			@Override
 			public void run() {
@@ -133,19 +141,19 @@ public class SwingCpuDecoderRenderer implements VideoDecoderRenderer {
 				LimeLog.info("Front buffer accelerated? "+strategy.getCapabilities().getFrontBufferCapabilities().isAccelerated());
 				LimeLog.info("Back buffer accelerated? "+strategy.getCapabilities().getBackBufferCapabilities().isAccelerated());
 				
+				DecodeUnit du;
 				while (!isInterrupted() && !dying)
 				{
-					long diff = nextFrameTime - System.currentTimeMillis();
-
-					if (diff < WAIT_CEILING_MS) {
-						// We must call Thread.sleep in order to be interruptable
-						diff = 0;
+					du = depacketizer.pollNextDecodeUnit();
+					if (du != null) {
+						submitDecodeUnit(du);
+						depacketizer.freeDecodeUnit(du);
 					}
 					
-					try {
-						Thread.sleep(diff);
-					} catch (InterruptedException e) {
-						return;
+					long diff = nextFrameTime - System.currentTimeMillis();
+
+					if (diff > WAIT_CEILING_MS) {
+						continue;
 					}
 					
 					nextFrameTime = computePresentationTimeMs(targetFps);
@@ -172,6 +180,14 @@ public class SwingCpuDecoderRenderer implements VideoDecoderRenderer {
 						do {
 							do {
 								Graphics g = strategy.getDrawGraphics();
+								// make any remaining space black
+								g.setColor(Color.BLACK);
+								g.fillRect(0, 0, dx1, frame.getHeight());
+								g.fillRect(0, 0, frame.getWidth(), dy1);
+								g.fillRect(0, dy1+newHeight, frame.getWidth(), frame.getHeight());
+								g.fillRect(dx1+newWidth, 0, frame.getWidth(), frame.getHeight());
+								
+								// draw the frame
 								g.drawImage(image, dx1, dy1, dx1+newWidth, dy1+newHeight, 0, 0, width, height, null);
 								g.dispose();
 							} while (strategy.contentsRestored());
@@ -181,8 +197,10 @@ public class SwingCpuDecoderRenderer implements VideoDecoderRenderer {
 				}
 			}
 		};
+		rendererThread.setPriority(Thread.MAX_PRIORITY);
 		rendererThread.setName("Video - Renderer (CPU)");
 		rendererThread.start();
+		return true;
 	}
 	
 	/*
@@ -218,7 +236,7 @@ public class SwingCpuDecoderRenderer implements VideoDecoderRenderer {
 	 */
 	public boolean submitDecodeUnit(DecodeUnit decodeUnit) {
 		byte[] data;
-		
+				
 		// Use the reserved decoder buffer if this decode unit will fit
 		if (decodeUnit.getDataLength() <= DECODER_BUFFER_SIZE) {
 			decoderBuffer.clear();
@@ -239,10 +257,32 @@ public class SwingCpuDecoderRenderer implements VideoDecoderRenderer {
 			}
 		}
 		
-		return (AvcDecoder.decode(data, 0, decodeUnit.getDataLength()) == 0);
-	}
+		boolean success = (AvcDecoder.decode(data, 0, decodeUnit.getDataLength()) == 0);
+		if (success) {
+			long timeAfterDecode = System.currentTimeMillis();
+			
+		    // Add delta time to the totals (excluding probable outliers)
+		    long delta = timeAfterDecode - decodeUnit.getReceiveTimestamp();
+			if (delta >= 0 && delta < 300) {
+			    totalTimeMs += delta;
+			    totalFrames++;
+			}
+		}
+		
+		return success;	}
 
 	public int getCapabilities() {
 		return 0;
+	}
+
+	public int getAverageDecoderLatency() {
+		return 0;
+	}
+
+	public int getAverageEndToEndLatency() {
+		if (totalFrames == 0) {
+			return 0;
+		}
+		return (int)(totalTimeMs / totalFrames);
 	}
 }
