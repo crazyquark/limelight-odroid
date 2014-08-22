@@ -62,7 +62,7 @@ To launch Limelight from a command line:
 ##FFmpeg Setup (libavcodec, libavutil, ...)
 These are the only libraries where the default dev packages didn't work for me. The source can can be gotten via the [tip](https://github.com/FFmpeg/FFmpeg/) or the [last tested](https://github.com/FFmpeg/FFmpeg/tree/96470ca22b3b46677de0e2df64e87c5ec80d752b).
   ```
-  $ ./configure --enabled-gpl --enable-shared --disable-nonfree --disable-ffmpeg --disable-ffplay --disable-ffprobe --disable-ffserver --disable-doc --disable-debug
+  $ ./configure --enable-gpl --enable-shared --disable-nonfree --disable-ffmpeg --disable-ffplay --disable-ffprobe --disable-ffserver --disable-doc --disable-debug
   $ make clean && make
   $ su -c "make install"
   ```
