@@ -49,23 +49,58 @@ To launch Limelight from a command line:
 * `-30fps` use 30 fps stream (default)
 * `-60fps` use 60 fps stream
 
-##Compilation
+## Installing on Odroid
 
-* Install ant, gcc, make and other required build tools as required
-* Install openjdk-7-jdk, libopus/libopus-dev, FFmpeg libs (See FFmpeg Setep below), and possibly other libraries
-* Have `export LD_LIBRARY_PATH=/usr/local/lib/` or change the path to point to the FFmpeg libraries
-* Compile libraries in jni/*/ folders via the `./buildlinuxarm.sh` command within each directory
-* Copy each *.so produced to libs/linarm/
-* Go to the source root and run `ant`
-* Should create build/limelight-linarm.jar
+These instructions have been tested on Odroid-C1 and should work for Odroid-U3
 
-##FFmpeg Setup (libavcodec, libavutil, ...)
-These are the only libraries where the default dev packages didn't work for me. The source can can be gotten via the [tip](https://github.com/FFmpeg/FFmpeg/) or the [last tested](https://github.com/FFmpeg/FFmpeg/tree/96470ca22b3b46677de0e2df64e87c5ec80d752b).
-  ```
-  $ ./configure --enable-gpl --enable-shared --disable-nonfree --disable-ffmpeg --disable-ffplay --disable-ffprobe --disable-ffserver --disable-doc --disable-debug
-  $ make clean && make
-  $ su -c "make install"
-  ```
+###1. Install build tools
+
+```
+$ sudo apt-get install ant gcc make git openjdk-7-jdk libopus0 libopus-dev
+```
+#### *note*
+On the Odroid-C1 I received "perl: warning: Setting local failed" with `gcc`, I edited **/etc/default/locale** and **$HOME/.pam_environment** ([link](https://help.ubuntu.com/community/Locale)) with my local "en_US.UTF-8" for all settings then rebooted. Some of the settings were set to "es_US.UTF-8" (this doesn't effect the builds but removes ugly text while building)
+
+###2. Install and configure FFmpeg
+
+```
+$ wget -O ffmpeg.zip https://github.com/FFmpeg/FFmpeg/archive/96470ca22b3b46677de0e2df64e87c5ec80d752b.zip
+$ unzip ffmpeg.zip && cd FFmpeg-96470ca22b3b46677de0e2df64e87c5ec80d752b
+$ ./configure --enable-gpl --enable-shared --enable-avresample --disable-nonfree --disable-ffmpeg --disable-ffplay --disable-ffprobe --disable-ffserver --disable-doc --disable-debug
+$ make clean && make
+$ su -c "make install"
+```
+
+It is also worth mentioning that the FFmpeg tip usually works too, this is just the last tested version.
+
+###3. Setup the path
+
+Add "
+export LD_LIBRARY_PATH=/usr/local/lib/
+" to **$HOME/.bash_profile** and
+
+```
+$ source ~/.bash_profile
+```
+
+to update the shell. This assumes you are using bash of course.
+
+###4. Compiling lime-light
+
+First get the code and compile the JNI libraries, copying them to the **$SOURCE_ROOT/libs/linarm** folder... and compile!
+
+```
+$ git clone https://github.com/fporter/limelight-odroid.git limelight
+$ cd limelight
+$ (cd jni && sh build_linarm.sh)
+$ ant
+```
+
+###5. Run
+
+```
+$ java -jar limelight-linarm.jar
+```
 
 ##Authors
 
