@@ -7,6 +7,8 @@ import java.awt.Robot;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.awt.event.MouseMotionListener;
+import java.awt.event.MouseWheelEvent;
+import java.awt.event.MouseWheelListener;
 
 import javax.swing.SwingUtilities;
 
@@ -18,7 +20,7 @@ import com.limelight.nvstream.input.MouseButtonPacket;
  * Handles mouse input and sends them via the connection to the host
  * @author Diego Waxemberg
  */
-public class MouseHandler implements MouseListener, MouseMotionListener {
+public class MouseHandler implements MouseListener, MouseMotionListener, MouseWheelListener {
 	private NvConnection conn;
 	private Robot robot;
 	private Dimension size;
@@ -89,6 +91,20 @@ public class MouseHandler implements MouseListener, MouseMotionListener {
 			checkBoundaries(e);
 		}
 	}
+	
+	private static byte getButtonFromEvent(MouseEvent e) {
+		if (e.getButton() == MouseEvent.BUTTON1) {
+			return MouseButtonPacket.BUTTON_LEFT;
+		}
+		else if (e.getButton() == MouseEvent.BUTTON2) {
+			return MouseButtonPacket.BUTTON_MIDDLE;
+		}
+		else if (e.getButton() == MouseEvent.BUTTON3) {
+			return MouseButtonPacket.BUTTON_RIGHT;
+		}
+		
+		return 0;
+	}
 
 	/**
 	 * Invoked when a mouse button is pressed.
@@ -100,20 +116,8 @@ public class MouseHandler implements MouseListener, MouseMotionListener {
 		e.consume();
 		
 		if (captureMouse) {
-			byte mouseButton = 0x0;
-
-			if (SwingUtilities.isLeftMouseButton(e)) {
-				mouseButton = MouseButtonPacket.BUTTON_1;
-			}
-
-			if (SwingUtilities.isMiddleMouseButton(e)) {
-				mouseButton = MouseButtonPacket.BUTTON_2;
-			}
-
-			if (SwingUtilities.isRightMouseButton(e)) {
-				mouseButton = MouseButtonPacket.BUTTON_3;
-			}
-
+			byte mouseButton = getButtonFromEvent(e);
+			
 			if (mouseButton > 0) {
 				conn.sendMouseButtonDown(mouseButton);
 			}
@@ -140,21 +144,9 @@ public class MouseHandler implements MouseListener, MouseMotionListener {
 		if (e.isConsumed()) return;
 		
 		if (captureMouse) {
-			byte mouseButton = 0x0;
-
-			if (SwingUtilities.isLeftMouseButton(e)) {
-				mouseButton = MouseButtonPacket.BUTTON_1;
-			}
-
-			if (SwingUtilities.isMiddleMouseButton(e)) {
-				mouseButton = MouseButtonPacket.BUTTON_2;
-			}
-
-			if (SwingUtilities.isRightMouseButton(e)) {
-				mouseButton = MouseButtonPacket.BUTTON_3;
-			}
-
-			if (mouseButton > 0) {	
+			byte mouseButton = getButtonFromEvent(e);
+			
+			if (mouseButton > 0) {
 				conn.sendMouseButtonUp(mouseButton);
 			}
 		}
@@ -237,6 +229,11 @@ public class MouseHandler implements MouseListener, MouseMotionListener {
 		robot.mouseMove(x, y);
 		lastX = x;
 		lastY = y;
+	}
+
+	public void mouseWheelMoved(MouseWheelEvent event) {
+		conn.sendMouseScroll((byte) event.getWheelRotation());
+		event.consume();
 	}
 
 }

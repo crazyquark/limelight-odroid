@@ -5,7 +5,6 @@ import java.awt.Graphics;
 import java.awt.GraphicsConfiguration;
 import java.awt.GraphicsEnvironment;
 import java.awt.Transparency;
-import java.awt.image.BufferStrategy;
 import java.awt.image.BufferedImage;
 import java.awt.image.ColorModel;
 import java.awt.image.DataBufferInt;
@@ -26,8 +25,7 @@ import com.limelight.nvstream.av.video.cpu.AvcDecoder;
  */
 public class SwingCpuDecoderRenderer implements VideoDecoderRenderer {
 
-	private Thread rendererThread;
-	private int targetFps;
+	private Thread rendererThread, decoderThread;
 	private int width, height;
 
 	private JFrame frame;
@@ -36,9 +34,6 @@ public class SwingCpuDecoderRenderer implements VideoDecoderRenderer {
 	
 	private static final int DECODER_BUFFER_SIZE = 92*1024;
 	private ByteBuffer decoderBuffer;
-	
-	// Only sleep if the difference is above this value
-	private static final int WAIT_CEILING_MS = 8;
 	
 	private static final int REFERENCE_PIXEL = 0x01020304;
 	
@@ -53,7 +48,6 @@ public class SwingCpuDecoderRenderer implements VideoDecoderRenderer {
 	 * @param drFlags flags for the decoder and renderer
 	 */
 	public boolean setup(int width, int height, int redrawRate, Object renderTarget, int drFlags) {
-		this.targetFps = redrawRate;
 		this.width = width;
 		this.height = height;
 		
@@ -122,42 +116,36 @@ public class SwingCpuDecoderRenderer implements VideoDecoderRenderer {
 	 * Starts the decoding and rendering of the video stream on a new thread
 	 */
 	public boolean start(final VideoDepacketizer depacketizer) {
-		rendererThread = new Thread() {
+		decoderThread = new Thread() {
 			@Override
 			public void run() {
-				long nextFrameTime = System.currentTimeMillis();
-				int[] imageBuffer = ((DataBufferInt)image.getRaster().getDataBuffer()).getData();
-				
-				frame.createBufferStrategy(2);
-				BufferStrategy strategy = frame.getBufferStrategy();
-				
-				if (strategy.getCapabilities().isPageFlipping()) {
-					LimeLog.info("Using page flipping for buffer swaps");
-				}
-				else {
-					LimeLog.info("Using blitting for buffer swaps");
-				}
-				
-				LimeLog.info("Front buffer accelerated? "+strategy.getCapabilities().getFrontBufferCapabilities().isAccelerated());
-				LimeLog.info("Back buffer accelerated? "+strategy.getCapabilities().getBackBufferCapabilities().isAccelerated());
-				
 				DecodeUnit du;
-				while (!isInterrupted() && !dying)
-				{
-					du = depacketizer.pollNextDecodeUnit();
+				while (!dying) {
+					try {
+						du = depacketizer.takeNextDecodeUnit();
+					} catch (InterruptedException e1) {
+						return;
+					}
+					
 					if (du != null) {
 						submitDecodeUnit(du);
 						depacketizer.freeDecodeUnit(du);
 					}
 					
-					long diff = nextFrameTime - System.currentTimeMillis();
-
-					if (diff > WAIT_CEILING_MS) {
-						continue;
-					}
-					
-					nextFrameTime = computePresentationTimeMs(targetFps);
-					
+				}
+			}
+		};
+		decoderThread.setPriority(Thread.MAX_PRIORITY - 1);
+		decoderThread.setName("Video - Decoder (CPU)");
+		decoderThread.start();
+		
+		rendererThread = new Thread() {
+			@Override
+			public void run() {
+				int[] imageBuffer = ((DataBufferInt)image.getRaster().getDataBuffer()).getData();
+				
+				while (!dying)
+				{	
 					int sides = frame.getInsets().left + frame.getInsets().right;
 					int topBottom = frame.getInsets().top + frame.getInsets().bottom;
 					
@@ -177,22 +165,26 @@ public class SwingCpuDecoderRenderer implements VideoDecoderRenderer {
 					}
 					
 					if (AvcDecoder.getRgbFrameInt(imageBuffer, imageBuffer.length)) {
-						do {
-							do {
-								Graphics g = strategy.getDrawGraphics();
-								// make any remaining space black
-								g.setColor(Color.BLACK);
-								g.fillRect(0, 0, dx1, frame.getHeight());
-								g.fillRect(0, 0, frame.getWidth(), dy1);
-								g.fillRect(0, dy1+newHeight, frame.getWidth(), frame.getHeight());
-								g.fillRect(dx1+newWidth, 0, frame.getWidth(), frame.getHeight());
-								
-								// draw the frame
-								g.drawImage(image, dx1, dy1, dx1+newWidth, dy1+newHeight, 0, 0, width, height, null);
-								g.dispose();
-							} while (strategy.contentsRestored());
-							strategy.show();
-						} while (strategy.contentsLost());
+						
+						Graphics g = frame.getGraphics();
+						// make any remaining space black
+						g.setColor(Color.BLACK);
+						g.fillRect(0, 0, dx1, frame.getHeight());
+						g.fillRect(0, 0, frame.getWidth(), dy1);
+						g.fillRect(0, dy1+newHeight, frame.getWidth(), frame.getHeight());
+						g.fillRect(dx1+newWidth, 0, frame.getWidth(), frame.getHeight());
+						
+						// draw the frame
+						g.drawImage(image, dx1, dy1, dx1+newWidth, dy1+newHeight, 0, 0, width, height, null);
+						g.dispose();
+					}
+					else {
+						// Wait and try again soon
+						try {
+							Thread.sleep(5);
+						} catch (InterruptedException e) {
+							break;
+						}
 					}
 				}
 			}
@@ -203,22 +195,19 @@ public class SwingCpuDecoderRenderer implements VideoDecoderRenderer {
 		return true;
 	}
 	
-	/*
-	 * Computes the amount of time to display a certain frame
-	 */
-	private long computePresentationTimeMs(int frameRate) {
-		return System.currentTimeMillis() + (1000 / frameRate);
-	}
-
 	/**
 	 * Stops the decoding and rendering of the video stream.
 	 */
 	public void stop() {
 		dying = true;
 		rendererThread.interrupt();
+		decoderThread.interrupt();
 		
 		try {
 			rendererThread.join();
+		} catch (InterruptedException e) { }
+		try {
+			decoderThread.join();
 		} catch (InterruptedException e) { }
 	}
 
@@ -269,7 +258,8 @@ public class SwingCpuDecoderRenderer implements VideoDecoderRenderer {
 			}
 		}
 		
-		return success;	}
+		return true;
+	}
 
 	public int getCapabilities() {
 		return 0;

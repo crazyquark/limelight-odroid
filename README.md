@@ -4,7 +4,7 @@
 
 Limelight-odroid allows you to stream your full collection of Steam games from your powerful desktop to your Odroid/Ubuntu device.
 
-Limelight also has a [Desktop implementation](https://github.com/limelight-stream/limelight-pc) (which this is based on) and an [Android implementation](https://github.com/limelight-stream/limelight-android). Versions for [iOS](https://github.com/limelight-stream/limelight-ios) and [Windows Phone](https://github.com/limelight-stream/limelight-wp) are currently in development.
+Limelight also has a [Desktop implementation](https://github.com/limelight-stream/limelight-pc) (which this is based on) and an [Android implementation](https://github.com/limelight-stream/limelight-android). Versions for [iOS](https://github.com/limelight-stream/limelight-ios) and [Windows and Windows Phone](https://github.com/limelight-stream/limelight-windows) are currently in development.
 
 ##Features
 
