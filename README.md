@@ -75,17 +75,15 @@ It is also worth mentioning that the FFmpeg tip usually works too, this is just 
 
 ###3. Setup the path
 
-Add "
-export LD_LIBRARY_PATH=/usr/local/lib/
-" to **$HOME/.bash_profile** and
+Add "export LD_LIBRARY_PATH=/usr/local/lib/" to **$HOME/.bash_profile** and
 
 ```
 $ source ~/.bash_profile
 ```
 
-to update the shell. This assumes you are using bash of course.
+to update the shell. This assumes you are using bash of course. My device was not loading **$HOME/.bash_profile** in each new session (no LD_LIBRARY_PATH), so to make this permanent I added "source ~/.bash_profile" to then end of **$HOME/.bashrc**.
 
-###4. Compiling lime-light
+###4. Compiling limelight
 
 First get the code and compile the JNI libraries, copying them to the **$SOURCE_ROOT/libs/linarm** folder... and compile!
 
